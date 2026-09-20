@@ -1,0 +1,13 @@
+# too lazy to get my ghidra project out of there
+*.gpr
+*.lock
+*.rep
+.venv*
+build
+thirdparty/*
+resources/custom.exe
+resources/th07.exe
+reccmp-user.yml
+reccmp-build.yml
+scripts/__pycache__/
+compile_commands.json

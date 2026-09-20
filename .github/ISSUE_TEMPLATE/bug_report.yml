@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible problem in one of the PS4 ports
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      options:
+        - Touhou 6: The Embodiment of Scarlet Devil
+        - Touhou 7: Perfect Cherry Blossom
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Port revision
+      description: Commit hash or release version.
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and the steps needed to reproduce it.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant log output
+      description: Remove IP addresses, usernames and other private data before pasting a short excerpt.
+      render: text
+  - type: checkboxes
+    id: legal
+    attributes:
+      label: Data check
+      options:
+        - label: I have not attached copyrighted game files, Sony system modules, fonts, saves or replays.
+          required: true

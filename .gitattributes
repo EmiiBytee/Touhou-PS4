@@ -1,0 +1,11 @@
+* text=auto
+
+*.sh text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+*.py text eol=lf
+*.glsl text eol=lf
+
+*.ico binary
+*.png binary
+*.ttf binary

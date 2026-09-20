@@ -1,0 +1,54 @@
+# Build products
+build/
+out/
+dist/
+*.pkg
+*.self
+*.elf
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dll
+*.exe
+*.spv
+*.sb
+
+# User-supplied game/runtime data
+games/
+private/
+ps4/private/
+patch/
+*.DAT
+*.dat
+*.rpy
+*.cfg
+*.log
+*.ttf
+*.otf
+!src/th06/NotoSans-Regular.ttf
+*.sprx
+*.prx
+
+# Locally supplied package artwork (redistribution rights vary)
+ps4/th06/pkg/sce_sys/icon0.png
+ps4/th06/pkg/sce_sys/pic1.png
+ps4/th07/pkg/sce_sys/icon0.png
+ps4/th07/pkg/sce_sys/pic1.png
+
+# Test evidence and media
+evidence/
+captures/
+*.mp4
+*.webm
+
+# Tool caches and editor files
+__pycache__/
+*.py[cod]
+.cache/
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
