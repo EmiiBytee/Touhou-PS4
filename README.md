@@ -42,11 +42,9 @@ PS4-specific work includes:
 - an **Options-menu change that replaces Fullscreen/Windowed with 4:3/16:9**;
 - PS4-safe filesystem, memory and package handling.
 
-### TH06 gameplay screenshots
+### TH06 gameplay screenshot
 
-| Gameplay screenshot 1 | Gameplay screenshot 2 |
-|---|---|
-| _Add `docs/images/th06-gameplay-1.png`_ | _Add `docs/images/th06-gameplay-2.png`_ |
+![Touhou 6 gameplay on PlayStation 4](docs/images/th06-gameplay.jpg)
 
 ## Touhou 7: Perfect Cherry Blossom
 
@@ -65,11 +63,9 @@ PS4-specific work includes:
 - an **Options-menu change that replaces Fullscreen/Windowed with 4:3/16:9**;
 - fixes for replay loading and the original PC controller configuration on PS4.
 
-### TH07 gameplay screenshots
+### TH07 gameplay screenshot
 
-| Gameplay screenshot 1 | Gameplay screenshot 2 |
-|---|---|
-| _Add `docs/images/th07-gameplay-1.png`_ | _Add `docs/images/th07-gameplay-2.png`_ |
+![Touhou 7 gameplay on PlayStation 4](docs/images/th07-gameplay.jpg)
 
 ## Controls
 
@@ -183,7 +179,7 @@ Detailed setup and package-art instructions are in [Building](docs/BUILDING.md).
 ├── ps4/th06/                 TH06 CMake/package target
 ├── ps4/th07/                 TH07 CMake/package target
 ├── ps4/tools/                patch, label and deployment helpers
-├── docs/                     installation, build and publication notes
+├── docs/                     installation, build and porting notes
 └── games/                    local-only game data; ignored by Git
 ```
 
