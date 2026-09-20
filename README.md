@@ -15,6 +15,13 @@ executable, Wine, DXVK or CPU emulation is involved.
 > archives, fonts, Sony system modules, translation downloads or a distributable full-game PKG.
 > You must provide files from legally obtained copies of the games.
 
+> [!WARNING]
+> These ports have been tested on real PS4 hardware, but visual issues may still occur. Depending
+> on the game-data revision and optional translation patches, some assets may be missing,
+> incorrectly positioned or displayed with texture-related glitches. When reporting one of these
+> problems, include the affected game and screen, the data/patch version, a screenshot or video,
+> and the relevant excerpt from `ps4_log.txt` without personal information.
+
 The project is not affiliated with Team Shanghai Alice, ZUN, Sony Interactive Entertainment or
 the upstream decompilation teams. Touhou Project and all original game assets belong to their
 respective rights holders.
