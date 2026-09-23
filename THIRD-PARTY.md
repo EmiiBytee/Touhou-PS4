@@ -71,9 +71,9 @@ are copyright Team Shanghai Alice / ZUN and are not distributed by this project.
 Microsoft fonts and Sony PS4 firmware/system modules are not distributed. Users must source any
 required files from systems or software they are legally entitled to use.
 
-The package artwork used during private development was omitted because its redistribution rights
-were not established. Public builds use the OpenOrbis sample icon unless the builder supplies
-local artwork.
+Each package icon (`ps4/<game>/pkg/sce_sys/icon0.png`) is cropped from the corresponding game's
+artwork, copyright Team Shanghai Alice / ZUN, and identifies the port on the PS4 home screen. Home
+screen backgrounds are not included.
 
 ## Development assistance
 

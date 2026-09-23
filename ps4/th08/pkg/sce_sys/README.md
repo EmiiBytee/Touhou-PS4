@@ -1,6 +1,6 @@
-# Local package artwork
+# Package artwork
 
-Place an opaque 512x512 `icon0.png` here and, optionally, a 1920x1080 `pic1.png`.
+`icon0.png` is the package icon (512x512), cropped from the game's own artwork.
 
-These files are ignored by Git. Use only artwork you are allowed to redistribute. If no icon is
-provided, the build falls back to the OpenOrbis sample icon.
+Optionally place a 1920x1080 `pic1.png` here for the home-screen background. It is ignored by Git.
+If `icon0.png` is missing, the build falls back to the OpenOrbis sample icon.

@@ -85,22 +85,19 @@ By default, intermediate files stay in the checkout's ignored `build/` directory
 THPS4_BUILD_ROOT="$HOME/thps4-build" bash ps4/build.sh th06
 ```
 
-## Local package artwork
+## Package artwork
 
-Public source does not include the private artwork used during development. Supply your own
-redistributable files if desired:
+Each game's package icon, `ps4/<game>/pkg/sce_sys/icon0.png` (512x512), is included and is cropped
+from that game's own artwork. A 1920x1080 home-screen background is optional and local-only:
 
 ```text
-ps4/th06/pkg/sce_sys/icon0.png   512x512, opaque PNG
-ps4/th06/pkg/sce_sys/pic1.png    optional 1920x1080 PNG
-ps4/th07/pkg/sce_sys/icon0.png   512x512, opaque PNG
-ps4/th07/pkg/sce_sys/pic1.png    optional 1920x1080 PNG
-ps4/th08/pkg/sce_sys/icon0.png   512x512, opaque PNG
-ps4/th08/pkg/sce_sys/pic1.png    optional 1920x1080 PNG
+ps4/th06/pkg/sce_sys/pic1.png
+ps4/th07/pkg/sce_sys/pic1.png
+ps4/th08/pkg/sce_sys/pic1.png
 ```
 
-Without a local `icon0.png`, the build uses the OpenOrbis sample icon. These local images are
-ignored by Git to prevent accidental publication.
+These `pic1.png` files are ignored by Git. If an `icon0.png` is missing, the build falls back to
+the OpenOrbis sample icon.
 
 ## Personal full packages
 
