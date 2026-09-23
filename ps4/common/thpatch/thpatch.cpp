@@ -28,7 +28,38 @@ struct State
     Json stages;
     Json themes;
     Json musicComments;
+    // The executable's own strings (their Shift-JIS bytes) and their translation, already in
+    // the form the game draws. Built by stage_thcrap.py as stringtable.js.
+    std::map<std::string, std::string> executableStrings;
+    // Boss titles and names from the msg scripts (Shift-JIS bytes -> English as written in the
+    // patch), for the scripts whose jdiff leaves them out. Built as msgnames.js.
+    std::map<std::string, std::string> msgNames;
 };
+
+// Reads a {"<hex bytes>": "text"} table into `out`, keyed by the decoded bytes.
+size_t LoadHexTable(const std::string &path, std::map<std::string, std::string> *out,
+                    std::string (*convert)(const std::string &))
+{
+    Json table;
+    if (!Json::ParseFile(path, &table) || table.type != Json::Object)
+    {
+        return 0;
+    }
+    for (const auto &entry : table.object)
+    {
+        if (!entry.second.IsString() || entry.first.size() % 2 != 0)
+        {
+            continue;
+        }
+        std::string original;
+        for (size_t i = 0; i < entry.first.size(); i += 2)
+        {
+            original += (char)std::strtoul(entry.first.substr(i, 2).c_str(), nullptr, 16);
+        }
+        (*out)[original] = convert != nullptr ? convert(entry.second.string) : entry.second.string;
+    }
+    return out->size();
+}
 
 State &S()
 {
@@ -123,17 +154,31 @@ void Put32(std::vector<uint8_t> &v, uint32_t x)
 }
 
 // ---------------------------------------------------------------------------------------
-// MSG (EoSD/PCB "msg06" format)
+// MSG
 //
 // File: i32 entryCount; u32 entryOffsets[entryCount]; then per entry a stream of
 //   { u16 time; u8 opcode; u8 argSize; u8 args[argSize] } ending with opcode 0.
-// Opcodes 3 (dialogue) and 8 (boss intro title, "h1") carry { i16 color; i16 line; char text[] }.
+// The container is the same in EoSD/PCB ("msg06") and IN ("msg08"). What differs is which
+// opcodes carry text, and that IN XORs every byte of its text with 0x77, terminator included:
+//
+//   msg06: 3 (dialogue) and 8 (boss intro title, "h1") carry { i16 color; i16 line; char text[] },
+//          the row in `line`. Boxes end at 0, 4 and 13.
+//   msg08: 3 carries { i16 color; i16 line; text } as above; 16 (speaker), 19 and 20 (top and
+//          bottom lines) carry only { text } and fill rows in order. Boxes end at 0, 4 and 15.
+//          IN's opcode 8 shows the boss title as an image, not text.
 //
 // thcrap groups text lines into boxes and keys each box "<time>_<n>" (or "<time>_h1_<n>"),
 // where time is the time of the box's first line and n counts boxes starting at that time.
-// A box ends at a wait (opcodes 4 / 13), at the end of the entry, or when a line does not
-// go below the previous one.
+// A box ends at one of the opcodes above, at the end of the entry, or when a line with an
+// explicit row does not go below the previous one. The opcode tables are thcrap's own
+// (base_tsa/formats.js).
 // ---------------------------------------------------------------------------------------
+
+#ifdef TH_THPATCH_MSG08
+constexpr bool kMsg08 = true;
+#else
+constexpr bool kMsg08 = false;
+#endif
 
 struct MsgInstr
 {
@@ -142,14 +187,90 @@ struct MsgInstr
     std::vector<uint8_t> args;
 };
 
-bool IsTextOp(uint8_t op)
+enum class MsgOp
 {
-    return op == 3 || op == 8;
+    Other,
+    HardLine,   // { i16 color; i16 line; text }
+    HardLineH1, // the same, boxed separately as "h1"
+    AutoLine,   // { text }, next row
+    BoxEnd,
+};
+
+MsgOp ClassifyMsgOp(uint8_t op)
+{
+    if (op == 0 || op == 4) return MsgOp::BoxEnd;
+    if (op == 3) return MsgOp::HardLine;
+    if (op == 8) return MsgOp::HardLineH1; // boss title and name, both games
+    if (kMsg08)
+    {
+        if (op == 16 || op == 19 || op == 20) return MsgOp::AutoLine;
+        if (op == 15) return MsgOp::BoxEnd;
+    }
+    else
+    {
+        if (op == 13) return MsgOp::BoxEnd;
+    }
+    return MsgOp::Other;
 }
 
-bool IsBoxBreak(uint8_t op)
+// IN draws its script text as Shift-JIS. The English lines are plain ASCII apart from a few
+// typographic characters, which are folded to their ASCII forms: passed through as UTF-8,
+// their bytes would be read as Japanese.
+std::string ToGameText(const std::string &utf8)
 {
-    return op == 0 || op == 4 || op == 13;
+    std::string out;
+    for (size_t i = 0; i < utf8.size();)
+    {
+        const unsigned char c = (unsigned char)utf8[i];
+        if (c < 0x80)
+        {
+            out += (char)c;
+            i++;
+            continue;
+        }
+        size_t len = (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
+        uint32_t cp = len == 1 ? 0 : c & (0x7F >> len);
+        for (size_t k = 1; k < len && i + k < utf8.size(); k++)
+        {
+            cp = (cp << 6) | ((unsigned char)utf8[i + k] & 0x3F);
+        }
+        i += len;
+        switch (cp)
+        {
+        case 0x2018: case 0x2019: out += '\''; break;
+        case 0x201C: case 0x201D: out += '"'; break;
+        case 0x2013: out += '-'; break;
+        case 0x2014: out += "--"; break;
+        case 0x2026: out += "..."; break;
+        case 0x3000: out += "\x81\x40"; break; // ideographic space, as Shift-JIS
+        case 0x00A0: out += ' '; break;
+        case 0x00D7: out += "\x81\x7e"; break; // the rest are Shift-JIS symbols
+        case 0x2190: out += "\x81\xa9"; break;
+        case 0x2191: out += "\x81\xaa"; break;
+        case 0x2192: out += "\x81\xa8"; break;
+        case 0x2193: out += "\x81\xab"; break;
+        case 0x2605: out += "\x81\x9a"; break;
+        case 0x2606: out += "\x81\x99"; break;
+        case 0x266A: out += "\x81\xf4"; break;
+        case 0x30FB: out += "\x81\x45"; break;
+        default:
+            // Full-width ASCII (（ ） ／ ？ ０-９ ...) as its plain form, which the Latin
+            // font draws; anything else has no form the game can show.
+            out += cp >= 0xFF01 && cp <= 0xFF5E ? (char)(cp - 0xFEE0) : '?';
+            break;
+        }
+    }
+    return out;
+}
+
+void AppendMsgText(std::vector<uint8_t> &args, const std::string &text)
+{
+    const std::string game = kMsg08 ? ToGameText(text) : text;
+    for (char ch : game)
+    {
+        args.push_back(kMsg08 ? (uint8_t)((uint8_t)ch ^ 0x77) : (uint8_t)ch);
+    }
+    args.push_back(kMsg08 ? 0x77 : 0);
 }
 
 size_t Utf8Length(const std::string &s)
@@ -165,6 +286,8 @@ size_t Utf8Length(const std::string &s)
 // thcrap line markup -> plain text the game's renderer can draw:
 //   <c$text$ref>  text centered over the width of ref (padded with spaces)
 //   <i$text>      italics (not supported by the renderer: kept as plain text)
+//   <l$text>, <tl$text>  a label in a tabulated line (the statistics screen): the label,
+//                 padded so the columns after it roughly line up
 std::string FormatLine(const std::string &in)
 {
     // thcrap appends translator notes after an 0x14 control byte. The full thcrap
@@ -176,7 +299,13 @@ std::string FormatLine(const std::string &in)
     while (pos < source.size())
     {
         size_t open = source.find('<', pos);
-        if (open == std::string::npos || open + 2 >= source.size() || source[open + 2] != '$')
+        // The tag name is one to three lowercase letters followed by '$'.
+        size_t dollar = open == std::string::npos ? source.size() : open + 1;
+        while (dollar < source.size() && dollar - open <= 3 && source[dollar] >= 'a' && source[dollar] <= 'z')
+        {
+            dollar++;
+        }
+        if (open == std::string::npos || dollar == open + 1 || dollar >= source.size() || source[dollar] != '$')
         {
             out.append(source, pos,
                        open == std::string::npos ? std::string::npos : open + 1 - pos);
@@ -190,10 +319,21 @@ std::string FormatLine(const std::string &in)
             break;
         }
         out.append(source, pos, open - pos);
-        char kind = source[open + 1];
-        std::string body = source.substr(open + 3, close - open - 3);
+        const std::string kind = source.substr(open + 1, dollar - open - 1);
+        std::string body = source.substr(dollar + 1, close - dollar - 1);
         size_t sep = body.find('$');
-        if (kind == 'c' && sep != std::string::npos)
+        if (kind == "l" || kind == "tl")
+        {
+            std::string label = sep != std::string::npos ? body.substr(0, sep) : body;
+            while (!label.empty() && (label.back() == '\t' || label.back() == ' '))
+            {
+                label.pop_back();
+            }
+            out += label;
+            const size_t len = Utf8Length(label);
+            out.append(len < 14 ? 14 - len : 1, ' ');
+        }
+        else if (kind == "c" && sep != std::string::npos)
         {
             std::string text = body.substr(0, sep);
             size_t width = Utf8Length(body.substr(sep + 1));
@@ -254,14 +394,16 @@ std::vector<std::string> WrapDialogueLine(const std::string &raw)
     return {text.substr(0, best), text.substr(rightStart)};
 }
 
-std::vector<uint8_t> MakeTextArgs(int16_t color, int16_t line, const std::string &rawText)
+std::vector<uint8_t> MakeTextArgs(MsgOp kind, int16_t color, int16_t line, const std::string &rawText)
 {
     std::string text = FormatLine(rawText);
     std::vector<uint8_t> args;
-    Put16(args, (uint16_t)color);
-    Put16(args, (uint16_t)line);
-    args.insert(args.end(), text.begin(), text.end());
-    args.push_back(0);
+    if (kind != MsgOp::AutoLine)
+    {
+        Put16(args, (uint16_t)color);
+        Put16(args, (uint16_t)line);
+    }
+    AppendMsgText(args, text);
     return args;
 }
 
@@ -276,31 +418,43 @@ std::vector<MsgInstr> PatchMsgEntry(const std::vector<MsgInstr> &in, const Json 
     std::vector<Box> boxes;
     std::vector<int> boxOf(in.size(), -1);
     std::map<std::string, int> boxesAtTime;
-    int openBox[2] = {-1, -1}; // per type: dialogue, h1
-    int lastLine[2] = {0, 0};
+    int openBox[3] = {-1, -1, -1}; // per type: dialogue, h1, IN's explicit rows
+    int lastLine[3] = {0, 0, 0};
 
     for (size_t i = 0; i < in.size(); i++)
     {
         const MsgInstr &ins = in[i];
-        if (IsBoxBreak(ins.opcode))
+        const MsgOp kind = ClassifyMsgOp(ins.opcode);
+        if (kind == MsgOp::BoxEnd)
         {
+            // IN's explicit rows outlive the box ends between them: thcrap keys a row that
+            // comes back after a pause (Wriggle's "I was here!" once she shows up) to the box
+            // the first row opened, and only a row that does not go further down starts anew.
             openBox[0] = openBox[1] = -1;
+            if (!kMsg08) openBox[2] = -1;
             continue;
         }
-        if (!IsTextOp(ins.opcode) || ins.args.size() < 4)
+        if (kind == MsgOp::Other || (kind != MsgOp::AutoLine && ins.args.size() < 4))
         {
             continue;
         }
-        int type = ins.opcode == 8 ? 1 : 0;
-        int line = (int16_t)Rd16(&ins.args[2]);
-        if (openBox[type] < 0 || line <= lastLine[type])
+        int type = kind == MsgOp::HardLineH1 ? 1 : (kMsg08 && kind == MsgOp::HardLine ? 2 : 0);
+        bool newBox = openBox[type] < 0;
+        if (kind != MsgOp::AutoLine)
+        {
+            // An explicit row that does not go below the previous one starts a new box; auto
+            // lines just fill the next row of the current one.
+            int line = (int16_t)Rd16(&ins.args[2]);
+            newBox = newBox || line <= lastLine[type];
+            lastLine[type] = line;
+        }
+        if (newBox)
         {
             std::string prefix = std::to_string(ins.time) + (type == 1 ? "_h1_" : "_");
             int n = boxesAtTime[prefix]++;
             boxes.push_back({prefix + std::to_string(n), {}});
             openBox[type] = (int)boxes.size() - 1;
         }
-        lastLine[type] = line;
         boxes[openBox[type]].instrs.push_back(i);
         boxOf[i] = openBox[type];
     }
@@ -321,7 +475,8 @@ std::vector<MsgInstr> PatchMsgEntry(const std::vector<MsgInstr> &in, const Json 
         {
             translated[b].push_back(line.IsString() ? FormatLine(line.string) : "");
         }
-        if (translated[b].size() == 1 && !boxes[b].instrs.empty() &&
+        // PCB only: IN's English lines are written to fit its (base_tsa-widened) rows.
+        if (!kMsg08 && translated[b].size() == 1 && !boxes[b].instrs.empty() &&
             in[boxes[b].instrs[0]].opcode == 3)
         {
             translated[b] = WrapDialogueLine(translated[b][0]);
@@ -334,6 +489,28 @@ std::vector<MsgInstr> PatchMsgEntry(const std::vector<MsgInstr> &in, const Json 
     for (size_t i = 0; i < in.size(); i++)
     {
         int b = boxOf[i];
+        if (b >= 0 && translated[b].empty() && ClassifyMsgOp(in[i].opcode) == MsgOp::HardLineH1 &&
+            in[i].args.size() > 4 && !S().msgNames.empty())
+        {
+            // A boss title or name this script's jdiff leaves out: the same Japanese text is
+            // translated in another script of the stage (msgnames.js).
+            std::string original;
+            for (size_t k = 4; k < in[i].args.size(); k++)
+            {
+                const char ch = kMsg08 ? (char)(in[i].args[k] ^ 0x77) : (char)in[i].args[k];
+                if (ch == 0) break;
+                original += ch;
+            }
+            const auto found = S().msgNames.find(original);
+            if (found != S().msgNames.end())
+            {
+                const MsgInstr &ins = in[i];
+                out.push_back({ins.time, ins.opcode,
+                               MakeTextArgs(MsgOp::HardLineH1, (int16_t)Rd16(&ins.args[0]),
+                                            (int16_t)Rd16(&ins.args[2]), found->second)});
+                continue;
+            }
+        }
         if (b < 0 || translated[b].empty())
         {
             out.push_back(in[i]);
@@ -341,10 +518,11 @@ std::vector<MsgInstr> PatchMsgEntry(const std::vector<MsgInstr> &in, const Json 
         }
 
         const MsgInstr &ins = in[i];
-        int16_t color = (int16_t)Rd16(&ins.args[0]);
+        const MsgOp kind = ClassifyMsgOp(ins.opcode);
+        int16_t color = kind == MsgOp::AutoLine ? 0 : (int16_t)Rd16(&ins.args[0]);
         size_t k = posInBox[b]++;
         const std::string text = k < translated[b].size() ? translated[b][k] : "";
-        out.push_back({ins.time, ins.opcode, MakeTextArgs(color, (int16_t)k, text)});
+        out.push_back({ins.time, ins.opcode, MakeTextArgs(kind, color, (int16_t)k, text)});
 
         // The translation may need more lines than the original box had.
         if (k + 1 == boxes[b].instrs.size())
@@ -352,7 +530,7 @@ std::vector<MsgInstr> PatchMsgEntry(const std::vector<MsgInstr> &in, const Json 
             for (size_t extra = k + 1; extra < translated[b].size(); extra++)
             {
                 out.push_back({ins.time, ins.opcode,
-                               MakeTextArgs(color, (int16_t)extra, translated[b][extra])});
+                               MakeTextArgs(kind, color, (int16_t)extra, translated[b][extra])});
             }
         }
     }
@@ -465,7 +643,27 @@ void THPatch_Init(const char *dir)
     LoadJson("stages.js", &g_Stages);
     LoadJson("themes.js", &g_Themes);
     LoadJson("musiccmt.js", &g_MusicComments);
+
+    if (LoadHexTable(PatchPath("stringtable.js"), &S().executableStrings,
+                     [](const std::string &text) { return ToGameText(FormatLine(text)); }) > 0)
+    {
+        PS4_Log("thpatch: %u executable strings", (unsigned)S().executableStrings.size());
+    }
+    if (LoadHexTable(PatchPath("msgnames.js"), &S().msgNames, nullptr) > 0)
+    {
+        PS4_Log("thpatch: %u boss titles and names", (unsigned)S().msgNames.size());
+    }
     PS4_Log("thpatch: enabled (%s)", dir);
+}
+
+const char *THPatch_TranslateText(const char *text)
+{
+    if (!g_Enabled || text == nullptr || S().executableStrings.empty())
+    {
+        return text;
+    }
+    const auto found = S().executableStrings.find(text);
+    return found != S().executableStrings.end() ? found->second.c_str() : text;
 }
 
 bool THPatch_Enabled()
@@ -533,6 +731,37 @@ const char *THPatch_Spell(int id, const char *fallback)
 {
     const Json *s = g_Spells.Get(std::to_string(id));
     return s != nullptr && s->IsString() ? s->string.c_str() : fallback;
+}
+
+const char *THPatch_GameText(const char *text, const char *fallback)
+{
+    if (text == nullptr || text[0] == '\0')
+    {
+        return fallback;
+    }
+    static std::map<std::string, std::string> cache;
+    const auto cached = cache.find(text);
+    if (cached != cache.end())
+    {
+        return cached->second.c_str();
+    }
+    return cache.emplace(text, ToGameText(FormatLine(text))).first->second.c_str();
+}
+
+const char *THPatch_SpellText(int id, const char *fallback)
+{
+    static std::map<int, std::string> cache;
+    const auto cached = cache.find(id);
+    if (cached != cache.end())
+    {
+        return cached->second.c_str();
+    }
+    const Json *s = g_Spells.Get(std::to_string(id));
+    if (s == nullptr || !s->IsString() || s->string.empty())
+    {
+        return fallback;
+    }
+    return cache.emplace(id, ToGameText(FormatLine(s->string))).first->second.c_str();
 }
 
 const char *THPatch_Theme(const char *id, const char *fallback)

@@ -19,9 +19,18 @@ bool THPatch_WasReplaced(const char *name);
 // Takes ownership of `data`; returns the (possibly new, malloc'd) buffer.
 uint8_t *THPatch_Transform(const char *name, uint8_t *data, uint32_t *size);
 
+// A string from the executable, translated: looked up by its exact Shift-JIS content in the
+// stringtable.js that stage_thcrap.py builds from thcrap's stringlocs. Returns `text` itself
+// when there is no translation; otherwise plain ASCII the game can draw.
+const char *THPatch_TranslateText(const char *text);
+
 // String tables. Each returns `fallback` when the patch has no entry.
 const char *THPatch_StringDef(const char *id, const char *fallback);
 const char *THPatch_Spell(int id, const char *fallback);
+// The same, as text IN draws (Shift-JIS-safe ASCII); `id` is the zero-based spell number.
+const char *THPatch_SpellText(int id, const char *fallback);
+// Patch text (UTF-8 with thcrap markup) as IN draws it; `fallback` when `text` is NULL or empty.
+const char *THPatch_GameText(const char *text, const char *fallback);
 const char *THPatch_Stage(int stage, int line, const char *fallback);
 // BGM titles from themes.js, keyed by the track's file name without extension ("th06_01").
 const char *THPatch_Theme(const char *id, const char *fallback);

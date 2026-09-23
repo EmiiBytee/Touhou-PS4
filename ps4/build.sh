@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds a PS4 port inside WSL.
-# Usage: ps4/build.sh <th06|th07> [--full] [ninja targets...]
+# Usage: ps4/build.sh <th06|th07|th08> [--full] [ninja targets...]
 #   --full  bundle your own game files into a personal pkg. Never share that pkg: it
 #           contains copyrighted game data and may contain a locally supplied font.
 set -e
@@ -12,6 +12,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 case $GAME in
     th06) ASSETS="${TH06_ASSETS_DIR:-$ROOT/games/th06}" ;;
     th07) ASSETS="${TH07_ASSETS_DIR:-$ROOT/games/th07}" ;;
+    th08) ASSETS="${TH08_ASSETS_DIR:-$ROOT/games/th08}" ;;
     *) echo "unknown game: $GAME"; exit 1 ;;
 esac
 
@@ -21,7 +22,7 @@ if ldd "$OPENORBIS/bin/ld.lld" | grep -q "libxml2.so.2 => not found"; then
     export LD_LIBRARY_PATH="$ROOT/ps4/tools/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
-# Both release ports use the native OpenGNM + VideoOut backend and are packaged as normal
+# All release ports use the native OpenGNM + VideoOut backend and are packaged as normal
 # recordable games. The older Piglet/software experiments are intentionally not the default.
 BIG=ON
 SUFFIX="$SUFFIX-big"

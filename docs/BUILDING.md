@@ -62,7 +62,11 @@ descriptor-table layout expected by the current shaders.
 cd Touhou-PS4
 bash ps4/build.sh th06
 bash ps4/build.sh th07
+bash ps4/build.sh th08
 ```
+
+Touhou 8 also needs Python 3 at build time: its message table (`i18n.hpp`) is generated from
+`src/th08/config/i18n.csv`.
 
 Defaults can be overridden:
 
@@ -91,6 +95,8 @@ ps4/th06/pkg/sce_sys/icon0.png   512x512, opaque PNG
 ps4/th06/pkg/sce_sys/pic1.png    optional 1920x1080 PNG
 ps4/th07/pkg/sce_sys/icon0.png   512x512, opaque PNG
 ps4/th07/pkg/sce_sys/pic1.png    optional 1920x1080 PNG
+ps4/th08/pkg/sce_sys/icon0.png   512x512, opaque PNG
+ps4/th08/pkg/sce_sys/pic1.png    optional 1920x1080 PNG
 ```
 
 Without a local `icon0.png`, the build uses the OpenOrbis sample icon. These local images are
@@ -98,18 +104,25 @@ ignored by Git to prevent accidental publication.
 
 ## Personal full packages
 
-For local testing only, put your data in `games/th06/` or `games/th07/` and add `--full`:
+For local testing only, put your data in `games/th06/`, `games/th07/` or `games/th08/` and add
+`--full`:
 
 ```bash
 bash ps4/build.sh th06 --full
 bash ps4/build.sh th07 --full
+bash ps4/build.sh th08 --full
 ```
+
+If a `thcrap/` folder is present in the game folder, the full build stages the translation into
+the package as well (for Touhou 8, with `th08.exe` next to it as described in
+[Installation](INSTALLATION.md)).
 
 You can point elsewhere without copying the files:
 
 ```bash
 TH06_ASSETS_DIR=/path/to/th06 bash ps4/build.sh th06 --full
 TH07_ASSETS_DIR=/path/to/th07 bash ps4/build.sh th07 --full
+TH08_ASSETS_DIR=/path/to/th08 bash ps4/build.sh th08 --full
 ```
 
 Never distribute a `FULL-PERSONAL` package.

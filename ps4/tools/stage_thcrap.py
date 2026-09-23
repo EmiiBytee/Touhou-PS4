@@ -18,6 +18,11 @@ import sys
 import zlib
 
 SKIP = {"Thumbs.db", "desktop.ini"}
+# The executable version each port reconstructs. thcrap names version-specific files
+# "<name>.v<version>.<ext>" (IN's title02.v1.00d.png, text.v0.03.anm for the trial): the one
+# for this version stands in for the plain name, and those for other versions are left out.
+GAME_VERSIONS = {"th06": "1.02h", "th07": "1.00b", "th08": "1.00d"}
+VERSIONED = re.compile(r"^(?P<stem>.+)\.v(?P<version>\d+\.\d+[a-z]?)(?P<ext>\.[^.]+)$")
 # Patch-wide string tables merged key by key across the stack.
 MERGED = ("stringdefs.js", "themes.js")
 # thcrap's script_latin renders translations with Arial; so do the ports (as latin.ttf).
@@ -225,6 +230,162 @@ def patch_order(thcrap):
     sys.exit("no thcrap run config with a patch list in " + config_dir)
 
 
+def pe_string_reader(exe_path):
+    """Returns a function reading the NUL-terminated string at a relative virtual address."""
+    exe = open(exe_path, "rb").read()
+    pe = struct.unpack_from("<I", exe, 0x3C)[0]
+    sections = struct.unpack_from("<H", exe, pe + 6)[0]
+    optional = struct.unpack_from("<H", exe, pe + 20)[0]
+    table = []
+    for i in range(sections):
+        o = pe + 24 + optional + i * 40
+        vsize, vaddr, rsize, raddr = struct.unpack_from("<IIII", exe, o + 8)
+        table.append((vaddr, max(vsize, rsize), raddr))
+
+    def read(rva):
+        for vaddr, size, raddr in table:
+            if vaddr <= rva < vaddr + size:
+                start = rva - vaddr + raddr
+                return exe[start:exe.index(b"\0", start)]
+        return None
+    return read
+
+
+def write_string_table(out, exe_path):
+    """Builds stringtable.js: the executable's own strings, translated.
+
+    thcrap finds the strings it translates by their address in the executable (stringlocs,
+    "Rx<rva>" -> stringdefs id). The PS4 ports run recompiled code, so there are no addresses;
+    instead each string is read out of the user's executable here and the table maps its
+    Shift-JIS bytes (as hex) to the English text. The game's text drawing looks strings up by
+    content at runtime. The executable itself never goes into the package.
+    """
+    locs_path = os.path.join(out, "stringlocs.js")
+    defs_path = os.path.join(out, "stringdefs.js")
+    if not (os.path.isfile(locs_path) and os.path.isfile(defs_path) and os.path.isfile(exe_path)):
+        return
+    locs = load_json(locs_path)
+    defs = load_json(defs_path)
+    read = pe_string_reader(exe_path)
+    table = {}
+    for loc, key in locs.items():
+        match = re.match(r"^Rx([0-9a-fA-F]+)$", loc)
+        text = defs.get(key) if match else None
+        if not isinstance(text, str) or not text:
+            continue
+        original = read(int(match.group(1), 16))
+        # Entries the patch leaves as they are (names, "？？？？") would only swap in a folded
+        # copy of the same text.
+        if original and original.decode("cp932", "replace") != text:
+            table[original.hex()] = text
+    with open(os.path.join(out, "stringtable.js"), "w", encoding="utf-8") as f:
+        json.dump(table, f, ensure_ascii=False, indent=1)
+    print(f"  executable strings: {len(table)} of {len(locs)} translated")
+
+
+GAME_EXECUTABLES = {"th08": "th08.exe"}
+
+
+def load_pbgz_reader():
+    """The TH08 archive reader of the local reconstruction tools, when they are present."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    tools = os.path.normpath(os.path.join(here, "..", "..", "evidence", "th08-psp-native", "tools"))
+    if not os.path.isfile(os.path.join(tools, "th08_stock_font_profile.py")):
+        return None
+    sys.path.insert(0, tools)
+    try:
+        import th08_stock_font_profile
+    except Exception:
+        return None
+    return th08_stock_font_profile
+
+
+def msg08_title_boxes(data):
+    """IN msg: {entry: {"<time>_h1_<n>": [Shift-JIS line, ...]}}, grouped as thpatch does."""
+    count = struct.unpack_from("<i", data, 0)[0]
+    offsets = struct.unpack_from("<%dI" % count, data, 4)
+    result = {}
+    for entry, offset in enumerate(offsets):
+        boxes, per_time = {}, {}
+        key, last = None, 0
+        p = offset
+        while p + 4 <= len(data):
+            time, op, size = struct.unpack_from("<HBB", data, p)
+            args = data[p + 4:p + 4 + size]
+            p += 4 + size
+            if op in (0, 4, 15):
+                key = None
+            elif op == 8 and size >= 4:
+                line = struct.unpack_from("<h", args, 2)[0]
+                if key is None or line <= last:
+                    prefix = "%d_h1_" % time
+                    key = prefix + str(per_time.get(prefix, 0))
+                    per_time[prefix] = per_time.get(prefix, 0) + 1
+                    boxes[key] = []
+                last = line
+                text = bytearray()
+                for c in args[4:]:
+                    if c ^ 0x77 == 0:
+                        break
+                    text.append(c ^ 0x77)
+                boxes[key].append(bytes(text))
+            if op == 0:
+                break
+        result[str(entry)] = boxes
+    return result
+
+
+MSG_NAME_FALLBACKS = {
+    "リグル・ナイトバグ": "Wriggle Nightbug",
+    "ミスティア・ローレライ": "Mystia Lorelei",
+    "ミスティア・ローラレイ": "Mystia Lorelei",
+    "上白沢　慧音": "Keine Kamishirasawa",
+    "霊夢": "Reimu",
+    "魔理沙": "Marisa",
+    "鈴仙": "Reisen",
+    "永琳": "Eirin",
+    "輝夜": "Kaguya",
+}
+
+
+def write_msg_names(out, dat_path):
+    """Builds msgnames.js: boss titles and names (IN's msg opcode 8), Shift-JIS hex -> English.
+
+    lang_en translates these only in some of a stage's four scripts; the same Japanese text in
+    the other scripts is filled in from here at runtime. Pairing the patch's lines with the
+    Japanese ones needs the game archive and a local TH08 archive reader; without them only
+    the character names below are written.
+    """
+    names = {}
+    reader = load_pbgz_reader()
+    archive = None
+    if reader is not None and os.path.isfile(dat_path):
+        archive = reader.PbgzArchive(__import__("pathlib").Path(dat_path))
+    for jdiff_name in sorted(os.listdir(out)) if archive is not None else []:
+        match = re.match(r"^(msg\w+\.dat)\.jdiff$", jdiff_name)
+        if not match:
+            continue
+        try:
+            original = archive.extract(match.group(1))
+        except Exception:
+            continue
+        diff = load_json(os.path.join(out, jdiff_name))
+        diff = diff.get("entries", diff)
+        for entry, boxes in msg08_title_boxes(original).items():
+            translated = diff.get(entry, {})
+            for key, lines in boxes.items():
+                english = translated.get(key, {}).get("lines", [])
+                for jp, en in zip(lines, english):
+                    if isinstance(en, str) and en.strip() and jp:
+                        names.setdefault(jp.hex(), en)
+    # Character names, as the patch spells them; some are translated in no script at all.
+    for jp, en in MSG_NAME_FALLBACKS.items():
+        names.setdefault(jp.encode("cp932").hex(), en)
+    with open(os.path.join(out, "msgnames.js"), "w", encoding="utf-8") as f:
+        json.dump(names, f, ensure_ascii=False, indent=1)
+    print(f"  boss titles and names: {len(names)}")
+
+
 def main():
     thcrap, game, out = sys.argv[1:4]
     shutil.rmtree(out, ignore_errors=True)
@@ -236,21 +397,29 @@ def main():
         count = 0
         layered = 0
         if os.path.isdir(game_dir):
+            files = []
             for root, _, names in os.walk(game_dir):
                 for name in names:
                     if name in SKIP:
                         continue
-                    src = os.path.join(root, name)
-                    rel = os.path.relpath(src, game_dir)
-                    dst = os.path.join(out, rel)
-                    os.makedirs(os.path.dirname(dst), exist_ok=True)
-                    if name.lower().endswith(".png") and os.path.isfile(dst):
-                        if layer_png(dst, src, dst):
-                            layered += 1
-                            count += 1
-                            continue
-                    shutil.copyfile(src, dst)
-                    count += 1
+                    match = VERSIONED.match(name)
+                    if match is None:
+                        files.append((False, os.path.join(root, name), name))
+                    elif match.group("version") == GAME_VERSIONS.get(game):
+                        files.append((True, os.path.join(root, name), match.group("stem") + match.group("ext")))
+            # A version-specific file overrides the plain one from the same patch.
+            files.sort(key=lambda f: f[0])
+            for _, src, name in files:
+                rel = os.path.join(os.path.relpath(os.path.dirname(src), game_dir), name)
+                dst = os.path.join(out, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if name.lower().endswith(".png") and os.path.isfile(dst):
+                    if layer_png(dst, src, dst):
+                        layered += 1
+                        count += 1
+                        continue
+                shutil.copyfile(src, dst)
+                count += 1
         for name in MERGED:
             path = os.path.join(patch, name)
             if os.path.isfile(path):
@@ -267,6 +436,10 @@ def main():
         break
     if game == "th06" and os.path.isfile(os.path.join(out, "text.anm")):
         fix_th06_text_anm(os.path.join(out, "text.anm"))
+    if game in GAME_EXECUTABLES:
+        write_string_table(out, os.path.join(thcrap, "..", GAME_EXECUTABLES[game]))
+    if game == "th08":
+        write_msg_names(out, os.path.join(thcrap, "..", "th08.dat"))
     if len(sys.argv) > 4 and os.path.isdir(sys.argv[4]):
         count = 0
         overlay = sys.argv[4]

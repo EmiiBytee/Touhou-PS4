@@ -1,9 +1,10 @@
-# Touhou 6 & Touhou 7 for PlayStation 4
+# Touhou 6, 7 & 8 for PlayStation 4
 
 Native PlayStation 4 ports of:
 
 - **Touhou 6: The Embodiment of Scarlet Devil** (`v1.02h`)
 - **Touhou 7: Perfect Cherry Blossom** (`v1.00b`)
+- **Touhou 8: Imperishable Night** (`v1.00d`)
 
 These ports recompile the community decompilation projects for PS4. The original DirectX
 renderer is replaced by an OpenGNM/VideoOut backend that creates native GPU command buffers and
@@ -11,7 +12,7 @@ presents directly through the console. SDL2 is still used for input, audio and t
 executable, Wine, DXVK or CPU emulation is involved.
 
 > [!IMPORTANT]
-> This repository contains source code only. It does **not** contain either game, music, DAT
+> This repository contains source code only. It does **not** contain any of the games, music, DAT
 > archives, fonts, Sony system modules, translation downloads or a distributable full-game PKG.
 > You must provide files from legally obtained copies of the games.
 
@@ -67,20 +68,51 @@ PS4-specific work includes:
 
 ![Touhou 7 gameplay on PlayStation 4](docs/images/th07-gameplay.jpg)
 
+## Touhou 8: Imperishable Night
+
+The TH08 port is based on the MIT-licensed
+[N0zoM1z0/th08](https://github.com/N0zoM1z0/th08) reconstruction (`port/portable-64bit`, its
+native 64-bit runtime), which continues the public
+[GensokyoClub TH08 decompilation](https://github.com/GensokyoClub/th08).
+
+PS4-specific work includes:
+
+- a Direct3D 8 implementation on OpenGNM: pre-transformed and projected geometry, the separate
+  colour/alpha texture stages, fog, depth and scissoring as the original expects;
+- SDL2 input, audio and timing through the reconstruction's Linux compatibility layer, with the
+  BGM streamer no longer able to stall sound effects while it reads `thbgm.dat`;
+- PS4-safe score, replay, configuration and log paths under `/data/touhou/th08/`;
+- 64-bit fixes where the original code assumed 32-bit sizes (effects, bullets, options and
+  dialogue state), including the Spell Practice retry crash;
+- a boss life-bar fix that keeps the bar across phase changes on every stage, matching the
+  original executable;
+- thcrap-lite support for IN's dialogue scripts (including boss titles and names), spell card
+  names, Music Room titles and comments, menu descriptions and help text, translated textures
+  and the translation's Latin font, with long lines narrowed to fit their box;
+- 1080p output with runtime 4:3 or 16:9 presentation;
+- an **Options-menu change that replaces Fullscreen/Windowed with 4:3/16:9**;
+- the ZUN cheat code on the controller: on the Result → Score difficulty screen press
+  ↑ ↑ ↓ ↓ ← → ← → Cross Circle.
+
+### TH08 gameplay screenshot
+
+![Touhou 8 gameplay on PlayStation 4](docs/images/th08-gameplay.jpg)
+
 ## Controls
 
-| DualShock 4 | Touhou 6 | Touhou 7 |
-|---|---|---|
-| Cross | Shoot / confirm | Shoot / confirm |
-| Circle | Bomb / cancel | Bomb / cancel |
-| L1 | Focus | — |
-| R1 | Skip dialogue | Focus |
-| Triangle | — | Skip dialogue |
-| Options | Pause / menu | Pause / menu |
-| D-pad / left stick | Move / navigate | Move / navigate |
+| DualShock 4 | Touhou 6 | Touhou 7 | Touhou 8 |
+|---|---|---|---|
+| Cross | Shoot / confirm | Shoot / confirm | Shoot / confirm |
+| Circle | Bomb / cancel | Bomb / cancel | Bomb / cancel |
+| L1 | Focus | — | — |
+| R1 | Skip dialogue | Focus | Focus |
+| Triangle | — | Skip dialogue | Skip dialogue |
+| Options | Pause / menu | Pause / menu | Pause / menu |
+| D-pad / left stick | Move / navigate | Move / navigate | Move / navigate |
 
 TH06 retains its in-game key configuration where supported. TH07 imposes the tested PS4 layout
-even if an older PC configuration file is present.
+even if an older PC configuration file is present. TH08 maps the DualShock 4 onto the game's own
+controller defaults, so the layout above is what a fresh configuration uses.
 
 ## Installing on a PS4
 
@@ -112,6 +144,16 @@ public release PKG should contain only the port executable and open build-time c
 ```text
 /data/touhou/th07/
 ├── th07.dat
+├── thbgm.dat
+├── msgothic.ttc
+└── patch/                 optional staged thcrap translation
+```
+
+### Touhou 8 data layout
+
+```text
+/data/touhou/th08/
+├── th08.dat
 ├── thbgm.dat
 ├── msgothic.ttc
 └── patch/                 optional staged thcrap translation
@@ -151,17 +193,19 @@ Build either native GNM port from the repository root:
 ```bash
 bash ps4/build.sh th06
 bash ps4/build.sh th07
+bash ps4/build.sh th08
 ```
 
 The source-only PKGs are written to `dist/`. You can override the dependency locations with
 `OPENGNM_STACK=/path/to/opengnm-stack` and `PSBC=/path/to/psbc`.
 
-For private testing only, place your legally obtained game files under `games/th06/` or
-`games/th07/`, then run:
+For private testing only, place your legally obtained game files under `games/th06/`,
+`games/th07/` or `games/th08/`, then run:
 
 ```bash
 bash ps4/build.sh th06 --full
 bash ps4/build.sh th07 --full
+bash ps4/build.sh th08 --full
 ```
 
 The resulting `FULL-PERSONAL` packages contain copyrighted game data. **Never upload, publish or
@@ -175,9 +219,11 @@ Detailed setup and package-art instructions are in [Building](docs/BUILDING.md).
 .
 ├── src/th06/                 TH06 portable source plus PS4 backend changes
 ├── src/th07/                 TH07 portable source plus PS4 backend changes
+├── src/th08/                 TH08 reconstruction source (subset) plus the PS4 renderer
 ├── ps4/common/               shared PS4 platform, VideoOut and thpatch-lite code
 ├── ps4/th06/                 TH06 CMake/package target
 ├── ps4/th07/                 TH07 CMake/package target
+├── ps4/th08/                 TH08 CMake/package target
 ├── ps4/tools/                patch, label and deployment helpers
 ├── docs/                     installation, build and porting notes
 └── games/                    local-only game data; ignored by Git
@@ -196,11 +242,11 @@ and documentation. Builds and gameplay were tested on hardware by Emii.
 ## Licensing and credits
 
 The repository-level license is GPL-3.0 because the TH06 portable source and modifications are
-GPL-3.0. Components that arrived under CC0, MIT, zlib or another compatible license retain their
-original notices. See [THIRD-PARTY.md](THIRD-PARTY.md) for the complete attribution and component
+GPL-3.0. Components that arrived under CC0 (TH07), MIT (TH08), zlib or another compatible license
+retain their original notices. See [THIRD-PARTY.md](THIRD-PARTY.md) for the complete attribution and component
 breakdown.
 
-Special thanks to the TH06 and TH07 decompilation contributors, OpenOrbis, PacBrew, OpenGNM,
+Special thanks to the TH06, TH07 and TH08 decompilation and reconstruction contributors, OpenOrbis, PacBrew, OpenGNM,
 freegnm, `lateleite/psbc`, SDL, thcrap/Touhou Patch Center and GoldHEN.
 
 Project assembled and hardware-tested by **Emii**.

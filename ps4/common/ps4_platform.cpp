@@ -18,7 +18,9 @@ void PS4_KeyboardInit();
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <pthread.h>
 #include <string>
+#include <vector>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -74,6 +76,54 @@ extern "C" int __real_mkdir(const char *path, mode_t mode);
 
 static FILE *g_PS4Log;
 
+// Log lines are written by a thread of their own. Each line costs three kernel calls (the
+// kernel log is relayed over the network while klog is connected) plus a flush to the disk,
+// and doing that on the game thread showed up as frame drops whenever the ports logged
+// anything mid-game. The writer wakes for every line, so what is lost to a crash is at most
+// the line being logged at that moment; the kernel's own crash dump goes to klog regardless.
+static pthread_mutex_t g_LogLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_LogWake = PTHREAD_COND_INITIALIZER;
+static std::string g_LogPending;
+static int g_LogWriter; // 0 not started, 1 running, -1 could not start: write inline
+
+static void WriteLogLines(const std::string &lines)
+{
+    size_t start = 0;
+    while (start < lines.size())
+    {
+        size_t end = lines.find('\n', start);
+        if (end == std::string::npos) end = lines.size();
+        const std::string line = lines.substr(start, end - start);
+        sceKernelDebugOutText(0, "[th-ps4] ");
+        sceKernelDebugOutText(0, line.c_str());
+        sceKernelDebugOutText(0, "\n");
+        start = end + 1;
+    }
+    if (g_PS4Log != NULL)
+    {
+        std::fwrite(lines.data(), 1, lines.size(), g_PS4Log);
+        std::fflush(g_PS4Log);
+    }
+}
+
+static void *LogWriterMain(void *)
+{
+    std::string batch;
+    for (;;)
+    {
+        pthread_mutex_lock(&g_LogLock);
+        while (g_LogPending.empty())
+        {
+            pthread_cond_wait(&g_LogWake, &g_LogLock);
+        }
+        batch.swap(g_LogPending);
+        pthread_mutex_unlock(&g_LogLock);
+        WriteLogLines(batch);
+        batch.clear();
+    }
+    return NULL;
+}
+
 // Goes to the kernel log (GoldHEN klog, port 3232) and to ps4_log.txt in the game dir.
 void PS4_Log(const char *fmt, ...)
 {
@@ -82,37 +132,103 @@ void PS4_Log(const char *fmt, ...)
     va_start(args, fmt);
     std::vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    sceKernelDebugOutText(0, "[th-ps4] ");
-    sceKernelDebugOutText(0, buf);
-    sceKernelDebugOutText(0, "\n");
-    if (g_PS4Log != NULL)
-    {
-        std::fprintf(g_PS4Log, "%s\n", buf);
-        std::fflush(g_PS4Log);
-    }
-}
 
-// The games only use relative paths. We don't rely on chdir() (it did not take effect
-// in the PS4 sandbox), so relative paths are rebased here instead.
-static std::string Rebase(const char *base, const char *path)
-{
-    std::string out = base;
-    out += '/';
-    // Skip "./" prefixes; the decomp still has some backslash paths from the Windows original.
-    while (path[0] == '.' && (path[1] == '/' || path[1] == '\\'))
+    pthread_mutex_lock(&g_LogLock);
+    if (g_LogWriter == 0)
     {
-        path += 2;
+        pthread_t thread;
+        g_LogWriter = pthread_create(&thread, NULL, LogWriterMain, NULL) == 0 ? 1 : -1;
+        if (g_LogWriter == 1) pthread_detach(thread);
     }
-    for (const char *p = path; *p != '\0'; p++)
+    if (g_LogWriter == 1)
     {
-        out += *p == '\\' ? '/' : *p;
+        g_LogPending += buf;
+        g_LogPending += '\n';
+        pthread_cond_signal(&g_LogWake);
+        pthread_mutex_unlock(&g_LogLock);
+        return;
     }
-    return out;
+    pthread_mutex_unlock(&g_LogLock);
+    WriteLogLines(std::string(buf) + "\n");
 }
 
 static bool IsRelative(const char *path)
 {
     return path != NULL && path[0] != '/' && path[0] != '\0';
+}
+
+// chdir() does not take effect in the PS4 sandbox, but the games do step into their own
+// subdirectories with it (TH08 uses replay/ and backup/), so a virtual working directory
+// below the game directory reproduces that and every relative path resolves against it.
+static std::string g_Cwd = TH_PS4_GAME_DIR;
+
+// Joins base and path, resolving "." and ".." and normalizing the backslashes the decomp
+// still carries from the Windows original.
+static std::string Rebase(const char *base, const char *path)
+{
+    std::string joined = base;
+    if (IsRelative(path))
+    {
+        joined += '/';
+        for (const char *p = path; *p != '\0'; p++)
+        {
+            joined += *p == '\\' ? '/' : *p;
+        }
+    }
+    else
+    {
+        joined = path;
+    }
+
+    std::vector<std::string> parts;
+    std::string component;
+    for (std::size_t i = 0; i <= joined.size(); i++)
+    {
+        if (i < joined.size() && joined[i] != '/')
+        {
+            component += joined[i];
+            continue;
+        }
+        if (component == "..")
+        {
+            if (!parts.empty())
+            {
+                parts.pop_back();
+            }
+        }
+        else if (!component.empty() && component != ".")
+        {
+            parts.push_back(component);
+        }
+        component.clear();
+    }
+
+    std::string out;
+    for (std::size_t i = 0; i < parts.size(); i++)
+    {
+        out += '/';
+        out += parts[i];
+    }
+    return out.empty() ? std::string("/") : out;
+}
+
+// Relative paths live under the virtual working directory; read-only misses fall back to
+// the same path inside the pkg's bundled assets, which needs the part below the game
+// directory rather than below the current one.
+static std::string LocalPath(const char *path)
+{
+    return IsRelative(path) ? Rebase(g_Cwd.c_str(), path) : std::string(path);
+}
+
+static bool BundledPath(const std::string &local, std::string *out)
+{
+    const std::string root = TH_PS4_GAME_DIR;
+    if (local.compare(0, root.size(), root) != 0)
+    {
+        return false;
+    }
+    *out = std::string(TH_PS4_BUNDLED_ASSETS_DIR) + local.substr(root.size());
+    return true;
 }
 
 // mkdir -p for the writable game directory.
@@ -180,12 +296,12 @@ extern "C" FILE *__wrap_fopen(const char *path, const char *mode)
         return __real_fopen(path, mode);
     }
 
-    std::string local = Rebase(TH_PS4_GAME_DIR, path);
+    std::string local = LocalPath(path);
     FILE *f = __real_fopen(local.c_str(), mode);
     bool readOnly = mode[0] == 'r' && std::strchr(mode, '+') == NULL;
-    if (f == NULL && readOnly)
+    std::string bundled;
+    if (f == NULL && readOnly && BundledPath(local, &bundled))
     {
-        std::string bundled = Rebase(TH_PS4_BUNDLED_ASSETS_DIR, path);
         f = __real_fopen(bundled.c_str(), mode);
         PS4_Log("fopen(%s, %s) -> %s", path, mode, f != NULL ? bundled.c_str() : "NOT FOUND");
     }
@@ -198,7 +314,60 @@ extern "C" FILE *__wrap_fopen(const char *path, const char *mode)
 
 extern "C" int __wrap_mkdir(const char *path, mode_t mode)
 {
-    return IsRelative(path) ? __real_mkdir(Rebase(TH_PS4_GAME_DIR, path).c_str(), mode) : __real_mkdir(path, mode);
+    return __real_mkdir(LocalPath(path).c_str(), mode);
+}
+
+// Only TH08 links these wrappers so far. TH06 and TH07 are already validated on hardware
+// with the plain game-directory rebase and would need their own retest to change it.
+#ifdef TH_PS4_VIRTUAL_CWD
+extern "C" int __real_chdir(const char *path);
+extern "C" int __real_rename(const char *from, const char *to);
+
+// Always succeeds: the directory is virtual, and the games treat a failure here as fatal.
+extern "C" int __wrap_chdir(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+    {
+        return -1;
+    }
+    g_Cwd = Rebase(g_Cwd.c_str(), path);
+    __real_chdir(g_Cwd.c_str()); // best effort; see above
+    MakeDirs(g_Cwd.c_str());
+    PS4_Log("chdir(%s) -> %s", path, g_Cwd.c_str());
+    return 0;
+}
+
+// TH08 rotates its score backups with rename() on bare file names.
+extern "C" int __wrap_rename(const char *from, const char *to)
+{
+    return __real_rename(LocalPath(from).c_str(), LocalPath(to).c_str());
+}
+#endif
+
+// Same policy as __wrap_fopen, for callers that do not go through fopen(): TH08 reads and
+// writes everything with the Win32 file API, which the POSIX adapter implements on open(),
+// stat() and unlink(). Those cannot be wrapped the way fopen() is, because the wrapped
+// allocator and SDL need the real ones.
+extern "C" void PS4_ResolveGamePath(const char *path, int readOnly, char *out, size_t outSize)
+{
+    if (out == NULL || outSize == 0)
+    {
+        return;
+    }
+    if (!IsRelative(path))
+    {
+        std::snprintf(out, outSize, "%s", path);
+        return;
+    }
+
+    std::string local = LocalPath(path);
+    std::string bundled;
+    if (readOnly && !FileExists(local.c_str()) && BundledPath(local, &bundled) &&
+        FileExists(bundled.c_str()))
+    {
+        local = bundled;
+    }
+    std::snprintf(out, outSize, "%s", local.c_str());
 }
 
 namespace

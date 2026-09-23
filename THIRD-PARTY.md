@@ -20,6 +20,17 @@ All TH06 PS4 source changes are distributed under GPL-3.0.
   `var_order` pragma work. Those notices remain in `src/th07/README.md`.
 - The original CC0 text is retained as `src/th07/LICENSE`.
 
+### Touhou 8
+
+- [N0zoM1z0/th08](https://github.com/N0zoM1z0/th08), `port/portable-64bit` — MIT. An independent
+  continuation of the public [GensokyoClub/th08](https://github.com/GensokyoClub/th08)
+  decompilation, whose history, authorship and license it preserves; it also credits @EstexNT's
+  `var_order` pragma port and draws on the N0zoM1z0/th07 reconstruction workflow.
+- The original MIT text, with both copyright notices, is retained as `src/th08/LICENSE`.
+- `src/th08/` carries the subset the PS4 build uses (`src/`, `config/i18n.csv`,
+  `scripts/generate_i18n.py`); the full reconstruction, its documentation and verification
+  tooling are in the upstream repository.
+
 ## PS4 toolchain and graphics
 
 - [OpenOrbis PS4 Toolchain](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain) — compiler,
@@ -54,7 +65,7 @@ dependencies. Their repositories are not vendored here.
 
 ## Original games and platform files
 
-Touhou 6, Touhou 7, their data archives, music, graphics and other original assets are copyright
+Touhou 6, Touhou 7, Touhou 8, their data archives, music, graphics and other original assets are copyright
 Team Shanghai Alice / ZUN and are not distributed by this project.
 
 Microsoft fonts and Sony PS4 firmware/system modules are not distributed. Users must source any

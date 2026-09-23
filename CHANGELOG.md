@@ -2,6 +2,29 @@
 
 All notable changes to the PS4 ports are documented here.
 
+## 1.1.0
+
+### Touhou 8: Imperishable Night (new)
+
+- Recompiled the N0zoM1z0/th08 reconstruction's native 64-bit runtime for PlayStation 4.
+- Added a Direct3D 8 device on OpenGNM with VideoOut presentation.
+- Added PS4-safe configuration, score, replay and log paths under `/data/touhou/th08/`.
+- Fixed structures cleared with 32-bit sizes on a 64-bit target, including the Spell Practice
+  retry crash.
+- Fixed the boss life bar disappearing between phases, following the original executable's
+  death-mode handling.
+- Fixed practice scores not being saved and lasers not being drawn.
+- Added thcrap-lite support for IN's dialogue scripts, boss titles and names, spell card names,
+  Music Room titles and comments, menu and help text, translated textures and the translation's
+  Latin font.
+- Replaced the original Fullscreen/Windowed option with a 4:3/16:9 selector.
+- Added the ZUN cheat code on the controller.
+
+### All ports
+
+- Log output is written by a background thread, so logging no longer costs frame time.
+- `stage_thcrap.py` selects version-specific patch files for the reconstructed game version.
+
 ## 1.0.0
 
 Initial public source release.
