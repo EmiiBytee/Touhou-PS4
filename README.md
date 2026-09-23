@@ -1,15 +1,23 @@
-# Touhou 6, 7 & 8 for PlayStation 4
+# Touhou PS4 Collection
 
-Native PlayStation 4 ports of:
+A growing collection of native PlayStation 4 ports of Touhou Project games. Each port recompiles a
+community decompilation or reconstruction of the original Windows game for PS4, with a native
+renderer and the console-specific work it needs, and new games are added to the same repository
+as they are ported.
 
-- **Touhou 6: The Embodiment of Scarlet Devil** (`v1.02h`)
-- **Touhou 7: Perfect Cherry Blossom** (`v1.00b`)
-- **Touhou 8: Imperishable Night** (`v1.00d`)
+## Games in the collection
 
-These ports recompile the community decompilation projects for PS4. The original DirectX
-renderer is replaced by an OpenGNM/VideoOut backend that creates native GPU command buffers and
-presents directly through the console. SDL2 is still used for input, audio and timing. No Windows
-executable, Wine, DXVK or CPU emulation is involved.
+| Game | Version | PS4 title ID | Data folder on the PS4 |
+|---|---|---|---|
+| [Touhou 6: The Embodiment of Scarlet Devil](#touhou-6-the-embodiment-of-scarlet-devil) | `v1.02h` | `THSP00006` | `/data/touhou/th06/` |
+| [Touhou 7: Perfect Cherry Blossom](#touhou-7-perfect-cherry-blossom) | `v1.00b` | `THSP00007` | `/data/touhou/th07/` |
+| [Touhou 8: Imperishable Night](#touhou-8-imperishable-night) | `v1.00d` | `THSP00008` | `/data/touhou/th08/` |
+
+Every port replaces the original DirectX renderer with an OpenGNM/VideoOut backend that creates
+native GPU command buffers and presents directly through the console. SDL2 is used for input,
+audio and timing. No Windows executable, Wine, DXVK or CPU emulation is involved. The ports share
+the PS4 platform layer, packaging and translation support in `ps4/common/`, and each game keeps
+its own source in `src/thXX/` and its package target in `ps4/thXX/`.
 
 > [!IMPORTANT]
 > This repository contains source code only. It does **not** contain any of the games, music, DAT
@@ -17,13 +25,13 @@ executable, Wine, DXVK or CPU emulation is involved.
 > You must provide files from legally obtained copies of the games.
 
 > [!WARNING]
-> These ports have been tested on real PS4 hardware, but visual issues may still occur. Depending
-> on the game-data revision and optional translation patches, some assets may be missing,
-> incorrectly positioned or displayed with texture-related glitches. When reporting one of these
-> problems, include the affected game and screen, the data/patch version, a screenshot or video,
-> and the relevant excerpt from `ps4_log.txt` without personal information.
+> Every port in the collection has been tested on real PS4 hardware, but visual issues may still
+> occur. Depending on the game-data revision and optional translation patches, some assets may be
+> missing, incorrectly positioned or displayed with texture-related glitches. When reporting one of
+> these problems, include the affected game and screen, the data/patch version, a screenshot or
+> video, and the relevant excerpt from `ps4_log.txt` without personal information.
 
-The project is not affiliated with Team Shanghai Alice, ZUN, Sony Interactive Entertainment or
+The collection is not affiliated with Team Shanghai Alice, ZUN, Sony Interactive Entertainment or
 the upstream decompilation teams. Touhou Project and all original game assets belong to their
 respective rights holders.
 
@@ -188,7 +196,7 @@ cd "$HOME/old-psbc"
 zig build -Doptimize=ReleaseFast
 ```
 
-Build either native GNM port from the repository root:
+Build any port of the collection from the repository root by its game ID:
 
 ```bash
 bash ps4/build.sh th06
@@ -231,7 +239,7 @@ Detailed setup and package-art instructions are in [Building](docs/BUILDING.md).
 
 ## Development tools and approach
 
-The ports were built and diagnosed with OpenOrbis/PacBrew, OpenGNM, `freegnm-examples`,
+The collection was built and diagnosed with OpenOrbis/PacBrew, OpenGNM, `freegnm-examples`,
 `lateleite/psbc`, Shaderc `glslc`, `gcn-dis`, `psb-dis`, CMake, Ninja, WSL2, GoldHEN FTP/logging,
 SDL2, SDL2_image, SDL2_ttf, Python and PowerShell. Hardware captures and logs were used to compare
 rendering and verify fixes on a real PS4.
@@ -243,10 +251,11 @@ and documentation. Builds and gameplay were tested on hardware by Emii.
 
 The repository-level license is GPL-3.0 because the TH06 portable source and modifications are
 GPL-3.0. Components that arrived under CC0 (TH07), MIT (TH08), zlib or another compatible license
-retain their original notices. See [THIRD-PARTY.md](THIRD-PARTY.md) for the complete attribution and component
-breakdown.
+retain their original notices. See [THIRD-PARTY.md](THIRD-PARTY.md) for the complete attribution
+and component breakdown.
 
-Special thanks to the TH06, TH07 and TH08 decompilation and reconstruction contributors, OpenOrbis, PacBrew, OpenGNM,
-freegnm, `lateleite/psbc`, SDL, thcrap/Touhou Patch Center and GoldHEN.
+Special thanks to the contributors of every decompilation and reconstruction this collection
+builds on, OpenOrbis, PacBrew, OpenGNM, freegnm, `lateleite/psbc`, SDL, thcrap/Touhou Patch Center
+and GoldHEN.
 
-Project assembled and hardware-tested by **Emii**.
+Touhou PS4 Collection is assembled and hardware-tested by **Emii**.

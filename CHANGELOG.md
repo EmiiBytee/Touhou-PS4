@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the PS4 ports are documented here.
+All notable changes to the Touhou PS4 Collection are documented here.
 
 ## 1.1.0
 

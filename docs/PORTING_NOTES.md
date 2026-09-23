@@ -2,10 +2,10 @@
 
 ## Architecture
 
-All three games execute their recompiled native C/C++ logic directly on PS4. The Windows DirectX path
-is replaced with a GNM backend that records PS4 GPU command buffers, while VideoOut owns the
-display buffers and flips. SDL2 remains responsible for controller input, audio callbacks and
-timing; SDL2_ttf handles dynamic text.
+Every game in the collection executes its recompiled native C/C++ logic directly on PS4. The
+Windows DirectX path is replaced with a GNM backend that records PS4 GPU command buffers, while
+VideoOut owns the display buffers and flips. SDL2 remains responsible for controller input, audio
+callbacks and timing; SDL2_ttf handles dynamic text.
 
 The renderer was developed with OpenGNM/freegnm tools and shader disassembly (`gcn-dis` and
 `psb-dis`). Hardware logs and GoldHEN captures were used to diagnose command-buffer completion,
@@ -55,6 +55,6 @@ the audio device lock.
 
 ## Packaging model
 
-Public packages are executable-only. All writable state and user-owned data live under
-`/data/touhou/th06/`, `/data/touhou/th07/` or `/data/touhou/th08/`. A private `--full` mode exists only to simplify local
-testing and is deliberately named `FULL-PERSONAL`.
+Public packages are executable-only. All writable state and user-owned data live under each
+game's own `/data/touhou/<game ID>/` folder (`th06`, `th07`, `th08`, ...). A private `--full` mode
+exists only to simplify local testing and is deliberately named `FULL-PERSONAL`.

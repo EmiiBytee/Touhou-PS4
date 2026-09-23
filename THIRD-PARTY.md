@@ -65,8 +65,8 @@ dependencies. Their repositories are not vendored here.
 
 ## Original games and platform files
 
-Touhou 6, Touhou 7, Touhou 8, their data archives, music, graphics and other original assets are copyright
-Team Shanghai Alice / ZUN and are not distributed by this project.
+The games in this collection, their data archives, music, graphics and other original assets
+are copyright Team Shanghai Alice / ZUN and are not distributed by this project.
 
 Microsoft fonts and Sony PS4 firmware/system modules are not distributed. Users must source any
 required files from systems or software they are legally entitled to use.
